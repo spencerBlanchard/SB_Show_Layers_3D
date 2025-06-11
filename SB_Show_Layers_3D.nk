@@ -1,0 +1,41 @@
+set cut_paste_input [stack 0]
+version 15.0 v1
+push $cut_paste_input
+Group {
+ name SB_Show_Layers_3D
+ tile_color 0x91adff
+ selected true
+ xpos 14
+ ypos -212
+ addUserKnob {20 User}
+ addUserKnob {3 num_layers l "Number of Layers"}
+ addUserKnob {6 create_cam l "Create Default Camera?" -STARTLINE}
+ addUserKnob {22 make_cards l "Make Card Inputs" T "import nuke\n\n\n\ndef reset_cards_and_inputs():\n    delete_nodes_by_class(\"Card2\")\n    delete_nodes_by_class(\"Input\")\n\n\ndef create_cards(num_inputs):\n    scene_node = nuke.toNode('theScene')\n    for i in range(num_inputs):\n        curr_Card = nuke.nodes.Card2()\n        curr_Card.setName(\"Card\" + str(i))\n\n\n        curr_Card\['translate'].setExpression(\"0\", 0)  # x\n        curr_Card\['translate'].setExpression(\"0\", 1)  # y\n\n\n        # Dynamically insert -i into the expression\n        z_expr = f\"parent.card_distance * \{-i\}\"\n        curr_Card\['translate'].setExpression(z_expr, 2)  # z\n\n\n        scene_node.setInput(i, curr_Card)\n\n\n\ndef create_inputs(num_inputs):\n        for i in range(num_inputs):    \n            curr_input = nuke.nodes.Input()\n            card_name = \"Card\" + str(i)\n            curr_card = nuke.toNode(card_name)\n            curr_card.setInput(0, curr_input)\n\n\ndef delete_nodes_by_class(class_name):\n    nodes_to_delete = nuke.allNodes(filter=class_name)\n    for node in nodes_to_delete:\n        if node.name() == 'Cam': #don't delete the camera input\n            continue\n        nuke.delete(node)\n\n\ndef make_inputs(num_inputs, group_node):\n    with group_node:\n        reset_cards_and_inputs()\n        create_cards(num_inputs)\n        create_inputs(num_inputs)\n\n\n\n\n\ndef create_camera(group_node):\n    group_name = group_node.name()\n    current_root = nuke.root()\n    nuke.selectAll() \n\n\n    nuke.root().begin()\n\n\n    try:\n        cam_node = nuke.createNode(\"Camera3\", inpanel=False)\n        cam_node.setName(\"SB_Camera\")\n\n\n        cam_node\['translate'].setExpression(\n            f\"-0.106 * \{group_name\}.num_layers \"\n            f\"- 1.575 * \{group_name\}.card_distance \"\n            f\"+ 0.84 * \{group_name\}.num_layers * \{group_name\}.card_distance \"\n            f\"+ 2.345\", 0)\n\n\n        cam_node\['translate'].setExpression(\n            f\"-0.047 * \{group_name\}.num_layers \"\n            f\"- 0.775 * \{group_name\}.card_distance \"\n            f\"+ 0.426 * \{group_name\}.num_layers * \{group_name\}.card_distance \"\n            f\"+ 1.119\", 1)\n\n\n        cam_node\['translate'].setExpression(\n            f\"-0.166 * \{group_name\}.num_layers \"\n            f\"- 1.751 * \{group_name\}.card_distance \"\n            f\"+ 0.726 * \{group_name\}.num_layers * \{group_name\}.card_distance \"\n            f\"+ 2.836\", 2)\n\n\n        cam_node\['rotate'].setValue(-18.62651634, 0)\n        cam_node\['rotate'].setValue(39.36392975, 1)\n        cam_node\['rotate'].setValue(0, 2)\n    finally:\n        current_root.begin()  \n\n\n    group_node.setInput(0, cam_node)\n    for i in range(cam_node.inputs()):\n        cam_node.setInput(i, None)\n\n\n\n\n\n    \n    \n    \n\n\n\n\n\n\ndef create_slider(num_layers):\n    node = nuke.thisNode()\n\n\n    if \"card_distance\" in node.knobs():\n        print(\"Not creating a slider since one already exists\")\n    else:\n        slider = nuke.Array_Knob('card_distance', 'Card Distance')\n        node.addKnob(slider)\n        slider.setFlag(0x00000002) #This makes it so you can see a slider bar instead of just a float value box\n        slider.setRange(0.0, 2.0)\n        slider.setValue(0.75)\n    \n    if num_layers > 3:\n        nuke.message((\n            \"Heads up! You asked for \{\} layers, but you're probably only seeing 3.\\n\\n\"\n            \"Worry not. They exist — just pull the pipe out of the left side of the group node.\"\n        ).format(int(num_layers)))\n\n\n\n\n\ndef create_break_expressions_button(group_node):\n    if \"break_expression\" in group_node.knobs():\n        print(\"Removing old button before re-adding.\")\n        group_node.removeKnob(group_node\[\"break_expression\"])\n\n\n    break_expression_button = nuke.PyScript_Knob(\n       \"break_expression\",  # Internal name of the knob\n       \"Bake Camera Position\",  # Label displayed in the UI\n   )\n    break_expression_button.setFlag(nuke.STARTLINE)\n    button_script = \"\"\"\ncam_node = nuke.toNode(\"SB_Camera\")\nif cam_node is None:\n    nuke.message(\"No Camera3 node named 'SB_Camera' found.\")\nelse:\n    for i in range(3):\n        val = cam_node\['translate'].value(i)\n        cam_node\['translate'].clearAnimated(i)\n        cam_node\['translate'].setValue(val, i)\n    for i in range(3):\n        val = cam_node\['rotate'].value(i)\n        cam_node\['rotate'].clearAnimated(i)\n        cam_node\['rotate'].setValue(val, i)\n\n\n    nuke.message(\"Expressions removed and values baked into SB_Camera.\")\n\n\n    # Now remove the button from the group node\n    group_node = nuke.thisNode()\n    if \"break_expression\" in group_node.knobs():\n        group_node.removeKnob(group_node\[\"break_expression\"])\n\"\"\"\n\n\n\n    break_expression_button.setValue(button_script)\n    group_node.addKnob(break_expression_button)\n\n\n\n\n    \n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\ngroup_node = nuke.thisNode()\n#group_node = nuke.selectedNode()\nnum_layers =int(group_node.knob(\"num_layers\").getValue())\ncreate_cam = group_node.knob(\"create_cam\").getValue()\n\n\nif num_layers < 1:\n    nuke.message(\"You entered the value \" + str(num_layers) + \". Please enter a number greater than 0\")\nelse:\n    print(\"making \" + str(num_layers) + \" cards.\")\n    create_slider(num_layers)\n    if create_cam == True:\n        create_camera(group_node)\n        create_break_expressions_button(group_node)\n    make_inputs(num_layers, group_node)\n\n\n\n     \n\n\n\n\n\n\n\n\n\n" +STARTLINE}
+}
+ Input {
+  inputs 0
+  name Cam
+  xpos -168
+  ypos 112
+ }
+ Scene {
+  inputs 0
+  name theScene
+  xpos -1
+  ypos 73
+ }
+push 0
+ ScanlineRender {
+  inputs 3
+  conservative_shader_sampling false
+  motion_vectors_type distance
+  name ScanlineRender1
+  xpos -11
+  ypos 200
+ }
+ Output {
+  name Output1
+  xpos -11
+  ypos 300
+ }
+end_group
